@@ -1,4 +1,5 @@
 from flask import Flask, request
+import datetime
 import requests
 import json
 import os
@@ -27,23 +28,25 @@ def docker_webhook():
         data = request.json
 
         # Check if this is a push event
-        if data.get('action') != 'push':
+        if "push_data" not in data:
             return "Not a push event", 200
 
         # Extract repository and tag information
         repo_name = data.get('repository', {}).get('name', 'Unknown')
         repo_full_name = data.get('repository', {}).get('repo_name', 'Unknown')
-        tag = data.get('target', {}).get('tag', 'Unknown')
-        pushed_at = data.get('target', {}).get('date', 'Unknown')
+        tag = data.get('push_data', {}).get('tag', 'Unknown')
+        pushed_at = data.get('push_data', {}).get('pushed_at', 'Unknown')
+        pushed_at_utc = datetime.datetime.utcfromtimestamp(pushed_at)
+        pushed_at_readable = pushed_at_utc.strftime('%Y-%m-%d %H:%M:%S UTC')
 
         # Check if this is one of our watched images
         if repo_name not in WATCHED_IMAGES and repo_full_name not in WATCHED_IMAGES:
-            print(f"Image {repo_full_name} not in watch list")
+            print(f"Image {repo_full_name} not in watch list", flush=True)
             return f"Image {repo_full_name} not in watch list", 200
 
         # Prepare notification message
         title = f"🐳 New Docker Tag Released"
-        message = f"**Image:** {repo_full_name}\n**Tag:** {tag}\n**Pushed:** {pushed_at}"
+        message = f"**Image:** {repo_full_name}\n**Tag:** {tag}\n**Pushed:** {pushed_at_readable}"
 
         # Send notification to Gotify
         gotify_payload = {
@@ -59,14 +62,14 @@ def docker_webhook():
         )
 
         if response.status_code == 200:
-            print(f"Notification sent for {repo_full_name}:{tag}")
+            print(f"Notification sent for {repo_full_name}:{tag}", flush=True)
             return "Notification sent", 200
         else:
-            print(f"Failed to send notification: {response.status_code} - {response.text}")
+            print(f"Failed to send notification: {response.status_code} - {response.text}", flush=True)
             return "Failed to send notification", 500
 
     except Exception as e:
-        print(f"Error processing webhook: {e}")
+        print(f"Error processing webhook: {e}", flush=True)
         return "Error processing webhook", 500
 
 @app.route('/health', methods=['GET'])
